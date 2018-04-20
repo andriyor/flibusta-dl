@@ -28,11 +28,11 @@ def get_search_result(book_name, sort):
     return r.text
 
 
-def fetch_book_id(search_result, custom_sort):
+def fetch_book_id(search_result, sort):
     doc = pq(search_result)
-    if custom_sort == 'litres':
+    if sort == 'litres':
         book = [pq(i)('div > a').attr.href for i in doc.find('div') if '[litres]' in pq(i).text().lower()][0]
-    elif custom_sort == 'rating':
+    elif sort == 'rating':
         books = [(pq(i)('div > a').attr.href, pq(i)('img').attr.title) for i in doc.find('div')]
         book = sorted(books, key=lambda book: RATING[book[1]], reverse=True)[0][0]
     else:
@@ -42,18 +42,16 @@ def fetch_book_id(search_result, custom_sort):
 
 @click.command()
 @click.argument('infile', type=click.File('r'))
-@click.option('--folder', default='flibusta_books')
-@click.option('--min-filesize', 'sort', flag_value='ss1')
-@click.option('--max-filesize', 'sort', flag_value='ss2')
-@click.option('--oldest', 'sort', flag_value='sd1')
-@click.option('--newest', 'sort', flag_value='sd2', default=True)
-@click.option('--litres', 'custom_sort', flag_value='litres')
-@click.option('--rating', 'custom_sort', flag_value='rating')
-@click.option('--fb2', 'file_format', flag_value='fb2')
-@click.option('--epub', 'file_format', flag_value='epub', default=True)
-@click.option('--mobi', 'file_format', flag_value='mobi')
+@click.option('-o', '--output_folder', default='flibusta_books', help='путь к папке в которую будут сохранятся книги')
+@click.option('--min-filesize', 'sort', flag_value='ss1', help='загрузка книг с минимальным размером')
+@click.option('--max-filesize', 'sort', flag_value='ss2', help='загрузка книг  с максимальным размером')
+@click.option('-o', '--oldest', 'sort', flag_value='sd1',  help='загрузка самых старых книг')
+@click.option('-n', '--newest', 'sort', flag_value='sd2', default=True, help='загрузка самых новых книг')
+@click.option('-l', '--litres', 'sort', flag_value='litres', help='приоритет загрузки по litres')
+@click.option('-r', '--rating', 'sort', flag_value='rating', help='приоритет загрузки по оценке' )
+@click.option('-ff', '--file_format', type=click.Choice(['fb2', 'epub', 'mobi']), default='epub')
 @click.option('--sfn', is_flag=True)
-def cli(infile, folder, sort, file_format, custom_sort, sfn):
+def cli(infile, folder, sort, file_format, sfn):
     books = infile.read().splitlines()
     downloaded_sizes, downloaded_book = [], []
     for book_name in tqdm(books, miniters=1):
@@ -63,7 +61,7 @@ def cli(infile, folder, sort, file_format, custom_sort, sfn):
             tqdm.write(f'Не нашлось ни единой книги по запросу {book_name}')
             continue
 
-        book = fetch_book_id(search_result, custom_sort)
+        book = fetch_book_id(search_result, sort)
         book_file = requests.get(f'http://flibusta.is{book}/{file_format}')
 
         pathlib.Path(folder).mkdir(parents=True, exist_ok=True) 
