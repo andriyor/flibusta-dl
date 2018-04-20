@@ -9,6 +9,7 @@ python_version = "3.6"
 [dev-packages]
 rope = "*"
 "e1839a8" = {path = ".", editable = true}
+pylint = "*"
 
 [packages]
 requests = "*"
