@@ -33,8 +33,9 @@ Options:
   -l, --litres                    приоритет загрузки по litres
   -r, --rating                    приоритет загрузки по оценке
   -ff, --file_format [fb2|epub|mobi]
-  --sfn
-  --help  
+                                  формат книг
+  --sfn                           имя файла такое же как при загрузке с сайта
+  --help                          Show this message and exit.
 ```
 ### Example usage
 
