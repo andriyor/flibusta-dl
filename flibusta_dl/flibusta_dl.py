@@ -12,6 +12,8 @@ import humanize
 from pyquery import PyQuery as pq
 from tqdm import tqdm
 
+_t = humanize.i18n.activate('ru_RU')
+
 RATING = {
     'файл не оценен': 0,
     'файл на 1': 1,
@@ -42,7 +44,10 @@ def fetch_book_id(search_result, sort):
         book = [pq(i)('div > a').attr.href for i in doc.find('div') if '[litres]' in pq(i).text().lower()][0]
     elif sort == 'rating':
         books = [(pq(i)('div > a').attr.href, pq(i)('img').attr.title) for i in doc.find('div')]
+        # print(books)
+        # pass
         book = sorted(books, key=lambda book: RATING[book[1]], reverse=True)[0][0]
+        # book = sorted(books, key=lambda book: RATING[book[1], reverse=True)[0][0]
     else:
         book = doc('div > a').attr.href
     return book
@@ -77,8 +82,7 @@ def save_file(sfn, book_file, output_folder, file_format, book_name):
         os.remove(file_path)
 
 
-def download_async(books_link, books, sfn, output_folder, file_format):
-    start_time = time.time()
+def download_async(books_link, sfn, output_folder, file_format):
     downloaded_sizes, downloaded_book = [], []
     rs = (grequests.get(u) for u in books_link.values())
     for book_file, book_name in zip(grequests.map(rs, size=3), books_link.keys()):
@@ -91,13 +95,28 @@ def download_async(books_link, books, sfn, output_folder, file_format):
         click.echo(f'книга {book_name} загружена размер - {size}')
 
     total_size = humanize.naturalsize(sum(downloaded_sizes))
-    end_time = humanize.naturaldelta(time.time() - start_time)
-    click.echo(f'всего загружено {len(downloaded_book)} книг из {len(books)} общим размером - {total_size} за {end_time}')
+    return downloaded_book, total_size
+
+
+def download_sync(books_link, sfn, output_folder, file_format):
+    downloaded_sizes, downloaded_book = [], []
+    for book_name, book_link  in tqdm(books_link.items(), miniters=1, disable=True):
+        book_file = requests.get(book_link)
+        save_file(sfn, book_file, output_folder, file_format, book_name)
+
+        content_length = int(book_file.headers['content-length'])
+        downloaded_sizes.append(content_length)
+        downloaded_book.append(book_name)
+        size = humanize.naturalsize(content_length)
+        tqdm.write(f'книга {book_name} загружена размер - {size}')
+
+    total_size = humanize.naturalsize(sum(downloaded_sizes))
+    return downloaded_book, total_size
 
 
 @click.command()
 @click.argument('infile', type=click.File('r'))
-@click.option('-o', '--output_folder', default='flibusta_books', help='путь к папке в которую будут сохранятся книги')
+@click.option('-of', '--output_folder', default='flibusta_books', help='путь к папке в которую будут сохранятся книги')
 @click.option('--min-filesize', 'sort', flag_value='ss1', help='загрузка книг с минимальным размером')
 @click.option('--max-filesize', 'sort', flag_value='ss2', help='загрузка книг  с максимальным размером')
 @click.option('-o', '--oldest', 'sort', flag_value='sd1', help='загрузка самых старых книг')
@@ -111,29 +130,13 @@ def cli(infile, output_folder, sort, file_format, sfn, asy):
     books = infile.read().splitlines()
     pathlib.Path(output_folder).mkdir(parents=True, exist_ok=True)
 
+    start_time = time.time()
     if asy:
         books_link = get_all_links(books, sort, file_format)
-        download_async(books_link, books, sfn, output_folder, file_format)
-
+        downloaded_book, total_size = download_async(books_link, sfn, output_folder, file_format)
     else:
-        start_time = time.time()
-        downloaded_sizes, downloaded_book = [], []
-        for book_name in tqdm(books, miniters=1):
-            search_result = get_search_result(book_name, sort)
+        books_link = get_all_links(books, sort, file_format)
+        downloaded_book, total_size = download_sync(books_link, sfn, output_folder, file_format)
 
-            if search_result == 'No result':
-                continue
-
-            book = fetch_book_id(search_result, sort)
-            book_file = requests.get(f'http://flibusta.is{book}/{file_format}')
-            save_file(sfn, book_file, output_folder, file_format, book_name)
-
-            content_length = int(book_file.headers['content-length'])
-            downloaded_sizes.append(content_length)
-            downloaded_book.append(book_name)
-            size = humanize.naturalsize(content_length)
-            tqdm.write(f'книга {book_name} загружена размер - {size}')
-
-        total_size = humanize.naturalsize(sum(downloaded_sizes))
-        end_time = humanize.naturaldelta(time.time() - start_time)
-        click.echo(f'всего загружено {len(downloaded_book)} книг из {len(books)} общим размером - {total_size} за {end_time}')
+    end_time = humanize.naturaldelta(time.time() - start_time)
+    click.echo(f'всего загружено {len(downloaded_book)} книг из {len(books)} общим размером - {total_size} за {end_time}')
